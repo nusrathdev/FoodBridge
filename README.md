@@ -7,6 +7,64 @@ Uva Wellassa University of Sri Lanka
 
 ---
 
+# 🚀 Team Split — 5 Independent Parts
+
+The work is divided into **5 features**, where each person builds their *own* piece fully (its own **database table + API + screen + test**) so nobody is stuck waiting on anyone else. This is called a **vertical slice**.
+
+> **⚠️ Step 0 — do this together first (~1 week):** set up the repo, the empty Express server, the empty React app, the database, and the **Login/Register system**. Every screen needs a logged-in user + token, so this shared base must exist before the 5 parts can be built independently. After Step 0, the parts below run in parallel with no blocking.
+
+### 🟦 PART 1 — Login & Accounts
+*The whole sign-up / sign-in feature.*
+- **Database:** `users` table
+- **API:** register, login, "who am I" (JWT token + roles)
+- **Screens:** Login page, Register page
+- **Test:** register → login → get token
+- *(This is also the shared base from Step 0, so whoever takes this builds it first.)*
+
+### 🟩 PART 2 — Donor Approval
+*Admin says yes/no to new donors.*
+- **Database:** `donors` table
+- **API:** list pending donors, approve/reject with a reason
+- **Screens:** Admin "approvals" page + Donor "my status" page
+- **Test:** register donor → admin approves → donor can now log in
+
+### 🟨 PART 3 — Food Posting
+*Donors post their surplus food.*
+- **Database:** `food_posts` table
+- **API:** create post, list posts, edit post, auto-expire old posts
+- **Screens:** Donor "create food post" form + "my posts" list
+- **Test:** verified donor posts food → it shows as `available`
+
+### 🟧 PART 4 — Volunteer Tasks
+*Admin assigns pickups, volunteer marks done.*
+- **Database:** `collection_tasks` table
+- **API:** assign task, list tasks, update status (assigned → picked up → delivered)
+- **Screens:** Admin "assign task" board + Volunteer "my tasks" dashboard with buttons
+- **Test:** admin assigns → volunteer marks picked up → delivered
+
+### 🟥 PART 5 — Reports & Impact
+*Numbers, charts, and downloads.*
+- **Database:** `distributions` table
+- **API:** log a distribution, analytics summary, CSV + PDF download
+- **Screens:** Admin "analytics dashboard" + "download report" buttons
+- **Test:** full run → numbers match → files download
+
+### The simple rule
+
+| Person | Their feature | Their table | Their objective |
+|--------|--------------|-------------|-----------------|
+| 1 | Login & Accounts | `users` | O1 |
+| 2 | Donor Approval | `donors` | O2 |
+| 3 | Food Posting | `food_posts` | O3 |
+| 4 | Volunteer Tasks | `collection_tasks` | O4 + O5 |
+| 5 | Reports & Impact | `distributions` | O6 + O7 |
+
+**Security (O8) is not a separate person** — *each person* secures their own feature (check the role, validate input, log the action). Everyone does a small piece of it on their own part.
+
+> Each person does a little database + a little backend + a little frontend — **only for their own feature** — so you can all work at the same time without blocking each other.
+
+---
+
 ## How to use this guide
 
 1. Read **Part 1–3** together as a team before anyone writes code. Everyone should understand the architecture.
