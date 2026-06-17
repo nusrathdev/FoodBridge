@@ -13,7 +13,7 @@ The work is divided into **5 features**, where each person builds their *own* pi
 
 > **⚠️ Step 0 — do this together first (~1 week):** set up the repo, the empty Express server, the empty React app, the database, and the **Login/Register system**. Every screen needs a logged-in user + token, so this shared base must exist before the 5 parts can be built independently. After Step 0, the parts below run in parallel with no blocking.
 
-### 🟦 PART 1 — Login & Accounts
+###  PART 1 — Login & Accounts
 *The whole sign-up / sign-in feature.*
 - **Database:** `users` table
 - **API:** register, login, "who am I" (JWT token + roles)
@@ -21,28 +21,28 @@ The work is divided into **5 features**, where each person builds their *own* pi
 - **Test:** register → login → get token
 - *(This is also the shared base from Step 0, so whoever takes this builds it first.)*
 
-### 🟩 PART 2 — Donor Approval
+###  PART 2 — Donor Approval
 *Admin says yes/no to new donors.*
 - **Database:** `donors` table
 - **API:** list pending donors, approve/reject with a reason
 - **Screens:** Admin "approvals" page + Donor "my status" page
 - **Test:** register donor → admin approves → donor can now log in
 
-### 🟨 PART 3 — Food Posting
+###  PART 3 — Food Posting
 *Donors post their surplus food.*
 - **Database:** `food_posts` table
 - **API:** create post, list posts, edit post, auto-expire old posts
 - **Screens:** Donor "create food post" form + "my posts" list
 - **Test:** verified donor posts food → it shows as `available`
 
-### 🟧 PART 4 — Volunteer Tasks
+###  PART 4 — Volunteer Tasks
 *Admin assigns pickups, volunteer marks done.*
 - **Database:** `collection_tasks` table
 - **API:** assign task, list tasks, update status (assigned → picked up → delivered)
 - **Screens:** Admin "assign task" board + Volunteer "my tasks" dashboard with buttons
 - **Test:** admin assigns → volunteer marks picked up → delivered
 
-### 🟥 PART 5 — Reports & Impact
+###  PART 5 — Reports & Impact
 *Numbers, charts, and downloads.*
 - **Database:** `distributions` table
 - **API:** log a distribution, analytics summary, CSV + PDF download
