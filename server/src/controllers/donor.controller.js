@@ -29,7 +29,7 @@ const listDonors = async (req, res) => {
 const myStatus = async (req, res) => {
     try {
         const [[donor]] = await pool.execute(
-            'SELECT id, org_name, status, rejection_reason FROM donors WHERE user_id = ?',
+            'SELECT id, org_name, food_handling_cert, status, rejection_reason FROM donors WHERE user_id = ?',
             [req.user.id]
         );
         if (!donor) return res.status(404).json({ error: 'Donor profile not found' });

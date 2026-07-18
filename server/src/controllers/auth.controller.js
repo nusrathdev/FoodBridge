@@ -9,7 +9,7 @@ const register = async (req, res) => {
     if (!errors.isEmpty())
         return res.status(400).json({ errors: errors.array() });
 
-    const {name, email, password, role} = req.body;
+    const { name, email, password, role, org_name, food_handling_cert } = req.body;
 
     try {
         // check if email already exists
@@ -30,8 +30,8 @@ const register = async (req, res) => {
         // if donor, create donor record
         if (role === 'donor') {
             await pool.execute(
-                'INSERT INTO donors (id, user_id) VALUES (?, ?)',
-                [uuidv4(), id]
+                'INSERT INTO donors (id, user_id, org_name, food_handling_cert) VALUES (?, ?, ?, ?)',
+                [uuidv4(), id, org_name, food_handling_cert]
             );
         }
 
