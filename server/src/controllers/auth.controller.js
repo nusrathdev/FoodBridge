@@ -31,7 +31,7 @@ const register = async (req, res) => {
         if (role === 'donor') {
             await pool.execute(
                 'INSERT INTO donors (id, user_id, org_name, food_handling_cert) VALUES (?, ?, ?, ?)',
-                [uuidv4(), id, org_name, food_handling_cert]
+                [uuidv4(), id, org_name ?? null, food_handling_cert ?? null]
             );
         }
 
