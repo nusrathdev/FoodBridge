@@ -1,25 +1,25 @@
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import {Link, useNavigate} from 'react-router-dom';
+import {useAuth} from '../context/AuthContext';
 
 const navLinks = {
     donor: [
-        { label: 'Dashboard', to: '/donor/dashboard' },
-        { label: 'Post Food', to: '/donor/post-food' },
-        { label: 'My Posts', to: '/donor/my-posts' },
+        {label: 'Dashboard', to: '/donor/dashboard'},
+        {label: 'Post Food', to: '/donor/post-food'},
+        {label: 'My Posts', to: '/donor/my-posts'},
     ],
     admin: [
-        { label: 'Dashboard', to: '/admin/dashboard' },
-        { label: 'Donors', to: '/admin/donors' },
-        { label: 'Tasks', to: '/admin/tasks' },
-        { label: 'Distributions', to: '/admin/distributions' },
+        {label: 'Dashboard', to: '/admin/dashboard'},
+        {label: 'Donors', to: '/admin/donors'},
+        {label: 'Tasks', to: '/admin/tasks'},
+        {label: 'Distributions', to: '/admin/distributions'},
     ],
     volunteer: [
-        { label: 'My Tasks', to: '/volunteer/tasks' },
+        {label: 'My Tasks', to: '/volunteer/tasks'},
     ],
 };
 
 export default function Navbar() {
-    const { user, logout } = useAuth();
+    const {user, logout} = useAuth();
     const navigate = useNavigate();
 
     const handleLogout = () => {
@@ -29,7 +29,11 @@ export default function Navbar() {
 
     return (
         <nav className="bg-brand-700 text-white px-6 py-3 flex items-center justify-between shadow">
-            <span className="font-bold text-lg tracking-tight">FoodBridge</span>
+            <span className="font-bold text-lg tracking-tight">
+                <Link to={navLinks[user.role]?.find(i => i.label === 'Dashboard')?.to || '#'}>
+                    FoodBridge
+                </Link>
+            </span>
             <div className="flex items-center gap-6 text-sm">
                 {(navLinks[user?.role] || []).map(link => (
                     <Link key={link.to} to={link.to}
