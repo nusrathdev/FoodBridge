@@ -5,7 +5,7 @@ const { v4: uuidv4 } = require('uuid');
 
 async function seedAdmin() {
     const name = 'System Admin';
-    const email = 'admin@foodbridge.com';
+    const email = 'admin@foodbridge.com ';
     const password = 'ChangeThisPassword123'; // change after first login in real life
 
     const [[existing]] = await pool.execute('SELECT id FROM users WHERE email = ?', [email]);
