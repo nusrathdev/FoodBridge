@@ -1,9 +1,9 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import client from '../../api/client';
+import client, { errorMessage } from '../../api/client';
 import Navbar from '../../components/Navbar';
 import StatusBadge from '../../components/StatusBadge';
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from '../../context/useAuth';
 
 export default function DonorDashboard() {
     const { user } = useAuth();
@@ -23,7 +23,7 @@ export default function DonorDashboard() {
                 setStatus(statusRes.data);
                 setPosts(postsRes.data);
             } catch (err) {
-                setError(err.response?.data?.error || 'Failed to load dashboard');
+                setError(errorMessage(err, 'Failed to load dashboard'));
             } finally {
                 setLoading(false);
             }
@@ -59,7 +59,8 @@ export default function DonorDashboard() {
                     Welcome, {user.name}
                 </h1>
                 <p className="text-gray-500 text-sm mb-6">
-                    {status?.org_name} · Verification: <StatusBadge status={status?.status} />
+                    {status?.org_name && `${status.org_name}. `}
+                    Verification status: <StatusBadge status={status?.status} />
                 </p>
 
                 {/* Pending warning */}
@@ -85,7 +86,7 @@ export default function DonorDashboard() {
                         { label: 'Available', value: posts.filter(p => p.status === 'available').length },
                         { label: 'Distributed', value: posts.filter(p => p.status === 'distributed').length },
                     ].map(stat => (
-                        <div key={stat.label} className="bg-white rounded-xl shadow-sm p-4 text-center">
+                        <div key={stat.label} className="bg-white rounded-lg shadow-sm p-4 text-center">
                             <p className="text-3xl font-bold text-brand-600">{stat.value}</p>
                             <p className="text-sm text-gray-500 mt-1">{stat.label}</p>
                         </div>
@@ -103,7 +104,7 @@ export default function DonorDashboard() {
                 )}
 
                 {/* Posts table */}
-                <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                <div className="bg-white rounded-lg shadow-sm overflow-hidden">
                     <div className="px-6 py-4 border-b border-gray-100">
                         <h2 className="font-semibold text-gray-800">My Food Posts</h2>
                     </div>
@@ -115,31 +116,34 @@ export default function DonorDashboard() {
                             )}
                         </div>
                     ) : (
-                        <table className="w-full text-sm">
-                            <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
-                            <tr>
-                                <th className="px-6 py-3 text-left">Food Type</th>
-                                <th className="px-6 py-3 text-left">Quantity</th>
-                                <th className="px-6 py-3 text-left">Pickup Window</th>
-                                <th className="px-6 py-3 text-left">Status</th>
-                            </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-100">
-                            {posts.map(post => (
-                                <tr key={post.id} className="hover:bg-gray-50">
-                                    <td className="px-6 py-3 font-medium text-gray-800">{post.food_type}</td>
-                                    <td className="px-6 py-3 text-gray-600">{post.quantity}</td>
-                                    <td className="px-6 py-3 text-gray-500">
-                                        {new Date(post.pickup_window_start).toLocaleString()} —
-                                        {new Date(post.pickup_window_end).toLocaleTimeString()}
-                                    </td>
-                                    <td className="px-6 py-3">
-                                        <StatusBadge status={post.status} />
-                                    </td>
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
+                                <tr>
+                                    <th className="px-6 py-3 text-left">Food Type</th>
+                                    <th className="px-6 py-3 text-left">Quantity</th>
+                                    <th className="px-6 py-3 text-left">Pickup Window</th>
+                                    <th className="px-6 py-3 text-left">Status</th>
                                 </tr>
-                            ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                {posts.map(post => (
+                                    <tr key={post.id} className="hover:bg-gray-50">
+                                        <td className="px-6 py-3 font-medium text-gray-800">{post.food_type}</td>
+                                        <td className="px-6 py-3 text-gray-600">{post.quantity}</td>
+                                        <td className="px-6 py-3 text-gray-500">
+                                            {new Date(post.pickup_window_start).toLocaleString()}
+                                            {' → '}
+                                            {new Date(post.pickup_window_end).toLocaleString()}
+                                        </td>
+                                        <td className="px-6 py-3">
+                                            <StatusBadge status={post.status} />
+                                        </td>
+                                    </tr>
+                                ))}
+                                </tbody>
+                            </table>
+                        </div>
                     )}
                 </div>
 

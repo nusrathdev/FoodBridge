@@ -1,39 +1,52 @@
 import { useState, useEffect } from 'react';
-import client from '../../api/client';
+import client, { errorMessage } from '../../api/client';
 import Navbar from '../../components/Navbar';
 import StatusBadge from '../../components/StatusBadge';
 
 export default function DonorVerification() {
     const [donors, setDonors] = useState([]);
     const [filter, setFilter] = useState('pending');
-    const [loading, setLoading] = useState(true);
+    // Which tab the current `donors` list belongs to. Until it matches `filter`, that tab is loading.
+    const [loadedFilter, setLoadedFilter] = useState(null);
+    const [reloadKey, setReloadKey] = useState(0);
     const [actionId, setActionId] = useState(null);
     const [reason, setReason] = useState('');
     const [rejectingId, setRejectingId] = useState(null);
+    const [error, setError] = useState('');
+
+    const loading = loadedFilter !== filter;
 
     useEffect(() => {
+        // Switching tabs quickly can leave an older request finishing last. `ignore` makes sure only
+        // the request for the tab currently shown may update the list, otherwise the "approved"
+        // tab could end up showing pending donors.
+        let ignore = false;
+        const fetchDonors = async () => {
+            try {
+                const { data } = await client.get(`/donors?status=${filter}`);
+                if (ignore) return;
+                setDonors(data);
+                setError('');
+            } catch (err) {
+                if (ignore) return;
+                setError(errorMessage(err, 'Failed to load donors'));
+            }
+            setLoadedFilter(filter);
+        };
         fetchDonors();
-    }, [filter]);
+        return () => { ignore = true; };
+    }, [filter, reloadKey]);
 
-    const fetchDonors = async () => {
-        setLoading(true);
-        try {
-            const { data } = await client.get(`/donors?status=${filter}`);
-            setDonors(data);
-        } catch (err) {
-            console.error(err);
-        } finally {
-            setLoading(false);
-        }
-    };
+    // Re-runs the effect above for the current tab.
+    const refresh = () => setReloadKey(k => k + 1);
 
     const approve = async (id) => {
         setActionId(id);
         try {
             await client.patch(`/donors/${id}/verify`, { decision: 'approved' });
-            fetchDonors();
+            refresh();
         } catch (err) {
-            alert(err.response?.data?.error || 'Failed');
+            alert(errorMessage(err, 'Failed to approve donor'));
         } finally {
             setActionId(null);
         }
@@ -46,9 +59,9 @@ export default function DonorVerification() {
             await client.patch(`/donors/${id}/verify`, { decision: 'rejected', reason });
             setRejectingId(null);
             setReason('');
-            fetchDonors();
+            refresh();
         } catch (err) {
-            alert(err.response?.data?.error || 'Failed');
+            alert(errorMessage(err, 'Failed to reject donor'));
         } finally {
             setActionId(null);
         }
@@ -61,13 +74,13 @@ export default function DonorVerification() {
                 <h1 className="text-2xl font-bold text-gray-900 mb-6">Donor Verification</h1>
 
                 {/* Filter tabs */}
-                <div className="flex gap-2 mb-6">
+                <div className="flex gap-6 mb-6 border-b border-gray-200">
                     {['pending', 'approved', 'rejected'].map(s => (
                         <button key={s} onClick={() => setFilter(s)}
-                                className={`px-4 py-1.5 rounded-full text-sm font-medium capitalize transition-colors
+                                className={`pb-2 -mb-px border-b-2 text-sm font-medium capitalize transition-colors
                 ${filter === s
-                                    ? 'bg-brand-600 text-white'
-                                    : 'bg-white border border-gray-300 text-gray-600 hover:bg-gray-50'
+                                    ? 'border-brand-600 text-brand-700'
+                                    : 'border-transparent text-gray-500 hover:text-gray-800'
                                 }`}>
                             {s}
                         </button>
@@ -76,15 +89,17 @@ export default function DonorVerification() {
 
                 {loading ? (
                     <p className="text-gray-400 text-center py-16">Loading...</p>
+                ) : error ? (
+                    <p className="text-red-500 text-center py-16">{error}</p>
                 ) : donors.length === 0 ? (
-                    <div className="bg-white rounded-xl shadow-sm px-6 py-16 text-center text-gray-400">
+                    <div className="bg-white rounded-lg shadow-sm px-6 py-16 text-center text-gray-400">
                         No {filter} donors.
                     </div>
                 ) : (
                     <div className="space-y-4">
                         {donors.map(donor => (
                             <div key={donor.id}
-                                 className="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
+                                 className="bg-white rounded-lg shadow-sm p-5 border border-gray-100">
                                 <div className="flex items-start justify-between gap-4">
                                     <div className="space-y-1">
                                         <div className="flex items-center gap-2">
@@ -116,7 +131,7 @@ export default function DonorVerification() {
                                                 Approve
                                             </button>
                                             <button
-                                                onClick={() => setRejectingId(donor.id)}
+                                                onClick={() => { setRejectingId(donor.id); setReason(''); }}
                                                 className="border border-red-300 text-red-600 px-3 py-1.5
                                    rounded-lg text-sm font-medium hover:bg-red-50">
                                                 Reject

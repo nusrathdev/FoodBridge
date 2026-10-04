@@ -1,15 +1,21 @@
 const pool = require('../config/db');
 
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
 // Builds the WHERE clause + params for date filtering, reused everywhere.
-function buildDateFilter(from, to) {
+function buildDateFilter(from, to, column = 'dist.distributed_at') {
     const conditions = [];
     const params = [];
     if (from) {
-        conditions.push('dist.distributed_at >= ?');
+        conditions.push(`${column} >= ?`);
         params.push(from);
     }
     if (to) {
-        conditions.push('dist.distributed_at <= ?');
+        // A date-only `to` (2026-06-30) means "through the end of that day". A plain <= compares
+        // against midnight and silently drops everything that happened during the day itself.
+        conditions.push(DATE_ONLY.test(to)
+            ? `${column} < DATE_ADD(?, INTERVAL 1 DAY)`
+            : `${column} <= ?`);
         params.push(to);
     }
     return {
@@ -50,11 +56,7 @@ async function getDistributionRecords({ from, to } = {}) {
 
 // Dashboard-level metrics: the questions an NGO admin actually asks.
 async function getSummaryMetrics({ from, to } = {}) {
-    const dateFilterPosts = [];
-    const dateParams = [];
-    if (from) { dateFilterPosts.push('created_at >= ?'); dateParams.push(from); }
-    if (to)   { dateFilterPosts.push('created_at <= ?'); dateParams.push(to); }
-    const postsWhere = dateFilterPosts.length ? `WHERE ${dateFilterPosts.join(' AND ')}` : '';
+    const { clause: postsWhere, params: dateParams } = buildDateFilter(from, to, 'created_at');
 
     const [[postCounts]] = await pool.execute(
         `
@@ -76,27 +78,33 @@ async function getSummaryMetrics({ from, to } = {}) {
         params
     );
 
+    // Top donors follow the same date range as the rest of the summary.
+    const { clause: donorsWhere, params: donorParams } = buildDateFilter(from, to, 'fp.created_at');
     const [topDonors] = await pool.execute(
         `
     SELECT donor.org_name, COUNT(fp.id) AS posts_donated
     FROM food_posts fp
     JOIN donors donor ON donor.id = fp.donor_id
+    ${donorsWhere}
     GROUP BY donor.id, donor.org_name
     ORDER BY posts_donated DESC
     LIMIT 5
-    `
+    `,
+        donorParams
     );
 
-    const totalPosts = postCounts.total_posts || 0;
-    const expiredCount = postCounts.expired_count || 0;
-    const distributedCount = postCounts.distributed_count || 0;
+    // SUM() comes back from MySQL as a DECIMAL, which mysql2 hands over as a string ("4").
+    // Convert so the API returns real numbers.
+    const totalPosts = Number(postCounts.total_posts) || 0;
+    const expiredCount = Number(postCounts.expired_count) || 0;
+    const distributedCount = Number(postCounts.distributed_count) || 0;
 
     return {
         food_posts: {
             total: totalPosts,
-            available: postCounts.available_count || 0,
-            assigned: postCounts.assigned_count || 0,
-            collected: postCounts.collected_count || 0,
+            available: Number(postCounts.available_count) || 0,
+            assigned: Number(postCounts.assigned_count) || 0,
+            collected: Number(postCounts.collected_count) || 0,
             distributed: distributedCount,
             expired: expiredCount,
         },

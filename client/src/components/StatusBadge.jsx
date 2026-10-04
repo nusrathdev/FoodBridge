@@ -1,20 +1,21 @@
+// Status is shown as plain coloured text. The colour carries the state; there is no pill behind it.
 const colors = {
-    pending:     'bg-yellow-100 text-yellow-800',
-    approved:    'bg-green-100 text-green-800',
-    rejected:    'bg-red-100 text-red-800',
-    available:   'bg-blue-100 text-blue-800',
-    assigned:    'bg-purple-100 text-purple-800',
-    collected:   'bg-orange-100 text-orange-800',
-    distributed: 'bg-green-100 text-green-800',
-    expired:     'bg-gray-100 text-gray-600',
-    delivered:   'bg-green-100 text-green-800',
-    cancelled:   'bg-red-100 text-red-800',
+    pending:     'text-yellow-700',
+    approved:    'text-green-700',
+    rejected:    'text-red-700',
+    available:   'text-blue-700',
+    assigned:    'text-purple-700',
+    collected:   'text-orange-700',
+    distributed: 'text-green-700',
+    expired:     'text-gray-500',
+    delivered:   'text-green-700',
+    cancelled:   'text-red-700',
 };
 
 export default function StatusBadge({ status }) {
     return (
-        <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${colors[status] || 'bg-gray-100 text-gray-600'}`}>
-      {status}
-    </span>
+        <span className={`text-xs font-semibold capitalize ${colors[status] || 'text-gray-500'}`}>
+            {status}
+        </span>
     );
 }

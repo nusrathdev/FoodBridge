@@ -41,6 +41,12 @@ const createTask = async (req, res) => {
             await conn.rollback();
             return res.status(409).json({ error: `Food post is ${post.status}, not available for assignment` });
         }
+        // The expiry job only runs once a minute, so a post can still read 'available' for a few
+        // seconds after its window has closed. Don't send a volunteer out for food that is gone.
+        if (new Date(post.pickup_window_end) <= new Date()) {
+            await conn.rollback();
+            return res.status(409).json({ error: 'The pickup window for this food post has already passed' });
+        }
 
         // Confirm the target user actually exists and is a volunteer.
         const [[volunteer]] = await conn.execute(

@@ -1,6 +1,5 @@
-import { createContext, useContext, useState, useCallback } from 'react';
-
-const AuthContext = createContext(null);
+import { useState, useCallback } from 'react';
+import { AuthContext } from './useAuth';
 
 export function AuthProvider({ children }) {
     const [user, setUser] = useState(() => {
@@ -30,11 +29,4 @@ export function AuthProvider({ children }) {
             {children}
         </AuthContext.Provider>
     );
-}
-
-// Custom hook — components call useAuth() not useContext(AuthContext) directly.
-export function useAuth() {
-    const ctx = useContext(AuthContext);
-    if (!ctx) throw new Error('useAuth must be used inside AuthProvider');
-    return ctx;
 }

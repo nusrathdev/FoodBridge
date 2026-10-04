@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import client from '../../api/client';
+import { useState, useEffect, useCallback } from 'react';
+import client, { errorMessage } from '../../api/client';
 import Navbar from '../../components/Navbar';
 import StatusBadge from '../../components/StatusBadge';
 
@@ -7,29 +7,34 @@ export default function VolunteerTasks() {
     const [tasks, setTasks] = useState([]);
     const [loading, setLoading] = useState(true);
     const [actionId, setActionId] = useState(null);
+    const [error, setError] = useState('');
 
-    useEffect(() => {
-        fetchTasks();
+    const loadTasks = useCallback(async () => {
+        const { data } = await client.get('/tasks');
+        setTasks(data);
     }, []);
 
-    const fetchTasks = async () => {
-        try {
-            const { data } = await client.get('/tasks');
-            setTasks(data);
-        } catch (err) {
-            console.error(err);
-        } finally {
-            setLoading(false);
-        }
-    };
+    useEffect(() => {
+        const fetchTasks = async () => {
+            try {
+                await loadTasks();
+            } catch (err) {
+                // Without this the page would claim "No active tasks" when the request simply failed.
+                setError(errorMessage(err, 'Failed to load tasks'));
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchTasks();
+    }, [loadTasks]);
 
     const updateStatus = async (taskId, status) => {
         setActionId(taskId);
         try {
             await client.patch(`/tasks/${taskId}/status`, { status });
-            fetchTasks();
+            await loadTasks();
         } catch (err) {
-            alert(err.response?.data?.error || 'Failed to update');
+            alert(errorMessage(err, 'Failed to update'));
         } finally {
             setActionId(null);
         }
@@ -47,6 +52,15 @@ export default function VolunteerTasks() {
         </div>
     );
 
+    if (error) return (
+        <div className="min-h-screen bg-gray-50">
+            <Navbar />
+            <div className="flex items-center justify-center h-64">
+                <p className="text-red-500">{error}</p>
+            </div>
+        </div>
+    );
+
     return (
         <div className="min-h-screen bg-gray-50">
             <Navbar />
@@ -59,14 +73,14 @@ export default function VolunteerTasks() {
                         Active ({active.length})
                     </h2>
                     {active.length === 0 ? (
-                        <div className="bg-white rounded-xl shadow-sm px-6 py-12 text-center text-gray-400">
+                        <div className="bg-white rounded-lg shadow-sm px-6 py-12 text-center text-gray-400">
                             No active tasks assigned to you.
                         </div>
                     ) : (
                         <div className="space-y-4">
                             {active.map(task => (
                                 <div key={task.id}
-                                     className="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
+                                     className="bg-white rounded-lg shadow-sm p-5 border border-gray-100">
                                     <div className="flex items-start justify-between gap-4 mb-4">
                                         <div className="space-y-1">
                                             <div className="flex items-center gap-2">
@@ -116,7 +130,7 @@ export default function VolunteerTasks() {
                                         {task.status === 'collected' && (
                                             <div className="bg-orange-50 border border-orange-200 text-orange-700
                                       px-4 py-2 rounded-lg text-sm">
-                                                Food collected — waiting for admin to log distribution.
+                                                Food collected. Waiting for admin to log the distribution.
                                             </div>
                                         )}
                                     </div>
@@ -132,7 +146,7 @@ export default function VolunteerTasks() {
                         <h2 className="text-lg font-semibold text-gray-700 mb-4">
                             History ({history.length})
                         </h2>
-                        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                        <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-x-auto">
                             <table className="w-full text-sm">
                                 <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
                                 <tr>

@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../../context/AuthContext';
-import client from '../../api/client';
+import { useNavigate, Link, Navigate } from 'react-router-dom';
+import { useAuth } from '../../context/useAuth';
+import client, { errorMessage } from '../../api/client';
 
 export default function Login() {
-    const { login } = useAuth();
+    const { user, login } = useAuth();
     const navigate = useNavigate();
     const [form, setForm] = useState({ email: '', password: '' });
     const [error, setError] = useState('');
@@ -21,15 +21,18 @@ export default function Login() {
             else if (data.role === 'donor') navigate('/donor/dashboard');
             else navigate('/volunteer/tasks');
         } catch (err) {
-            setError(err.response?.data?.error || 'Login failed');
+            setError(errorMessage(err, 'Login failed'));
         } finally {
             setLoading(false);
         }
     };
 
+    // Already signed in: go straight to the role's home page instead of showing the form again.
+    if (user) return <Navigate to="/" replace />;
+
     return (
         <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
-            <div className="bg-white rounded-xl shadow p-8 w-full max-w-md">
+            <div className="bg-white rounded-lg shadow p-8 w-full max-w-md">
                 <h1 className="text-2xl font-bold text-gray-900 mb-1">FoodBridge</h1>
                 <p className="text-gray-500 text-sm mb-6">Sign in to your account</p>
 

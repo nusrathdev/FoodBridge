@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import client from '../../api/client';
+import { useState, useEffect, useCallback } from 'react';
+import client, { errorMessage } from '../../api/client';
 import Navbar from '../../components/Navbar';
 import StatusBadge from '../../components/StatusBadge';
 
@@ -11,20 +11,23 @@ export default function MyPosts() {
     const [editForm, setEditForm] = useState({});
     const [saving, setSaving] = useState(false);
 
-    useEffect(() => {
-        fetchPosts();
+    const loadPosts = useCallback(async () => {
+        const { data } = await client.get('/food-posts');
+        setPosts(data);
     }, []);
 
-    const fetchPosts = async () => {
-        try {
-            const { data } = await client.get('/food-posts');
-            setPosts(data);
-        } catch (err) {
-            setError(err.response?.data?.error || 'Failed to load posts');
-        } finally {
-            setLoading(false);
-        }
-    };
+    useEffect(() => {
+        const fetchPosts = async () => {
+            try {
+                await loadPosts();
+            } catch (err) {
+                setError(errorMessage(err, 'Failed to load posts'));
+            } finally {
+                setLoading(false);
+            }
+        };
+        fetchPosts();
+    }, [loadPosts]);
 
     const startEdit = (post) => {
         setEditingId(post.id);
@@ -40,9 +43,9 @@ export default function MyPosts() {
         try {
             await client.patch(`/food-posts/${id}`, editForm);
             setEditingId(null);
-            fetchPosts();
+            await loadPosts();
         } catch (err) {
-            alert(err.response?.data?.error || 'Failed to update');
+            alert(errorMessage(err, 'Failed to update'));
         } finally {
             setSaving(false);
         }
@@ -73,14 +76,14 @@ export default function MyPosts() {
                 <h1 className="text-2xl font-bold text-gray-900 mb-6">My Food Posts</h1>
 
                 {posts.length === 0 ? (
-                    <div className="bg-white rounded-xl shadow-sm px-6 py-16 text-center text-gray-400">
+                    <div className="bg-white rounded-lg shadow-sm px-6 py-16 text-center text-gray-400">
                         No posts yet.
                     </div>
                 ) : (
                     <div className="space-y-4">
                         {posts.map(post => (
                             <div key={post.id}
-                                 className="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
+                                 className="bg-white rounded-lg shadow-sm p-5 border border-gray-100">
                                 {editingId === post.id ? (
                                     // Edit mode
                                     <div className="space-y-3">

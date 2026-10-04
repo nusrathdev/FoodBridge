@@ -11,7 +11,7 @@ const listVolunteers = async (req, res) => {
         u.name,
         u.email,
         u.created_at,
-        COUNT(CASE WHEN t.status = 'assigned' THEN 1 END) AS active_tasks,
+        COUNT(CASE WHEN t.status IN ('assigned', 'collected') THEN 1 END) AS active_tasks,
         COUNT(CASE WHEN t.status = 'delivered' THEN 1 END) AS completed_tasks
       FROM users u
       LEFT JOIN collection_tasks t ON t.volunteer_id = u.id

@@ -1,9 +1,13 @@
 const { Parser } = require('json2csv');
 const PDFDocument = require('pdfkit');
+const { validationResult } = require('express-validator');
 const { getDistributionRecords, getSummaryMetrics } = require('../services/reporting.service');
 
 // GET /api/reports/distributions.csv?from=&to=  (admin only)
 const exportCsv = async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
     try {
         const { from, to } = req.query;
         const rows = await getDistributionRecords({ from, to });
@@ -39,6 +43,9 @@ const exportCsv = async (req, res) => {
 
 // GET /api/reports/distributions.pdf?from=&to=  (admin only)
 const exportPdf = async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
     try {
         const { from, to } = req.query;
         const rows = await getDistributionRecords({ from, to });
@@ -51,7 +58,7 @@ const exportPdf = async (req, res) => {
         doc.pipe(res);
 
         // --- Header ---
-        doc.fontSize(18).font('Helvetica-Bold').text('FoodBridge — Distribution Report', { align: 'center' });
+        doc.fontSize(18).font('Helvetica-Bold').text('FoodBridge: Distribution Report', { align: 'center' });
         doc.moveDown(0.3);
         doc.fontSize(9).font('Helvetica').fillColor('#555')
             .text(`Generated: ${new Date().toLocaleString()}`, { align: 'center' })
@@ -87,17 +94,24 @@ const exportPdf = async (req, res) => {
 
         doc.font('Helvetica').fontSize(8);
         rows.forEach((row) => {
+            const cells = [
+                { text: row.donor_org || '-', x: colX.donor, width: 100 },
+                { text: row.food_type || '-', x: colX.food, width: 90 },
+                { text: String(row.quantity_distributed || '-'), x: colX.qty, width: 60 },
+                { text: row.recipient_group || '-', x: colX.recipient, width: 110 },
+                { text: new Date(row.distributed_at).toLocaleDateString(), x: colX.date, width: 100 },
+            ];
+            // A row is as tall as its tallest cell. Measuring first stops a wrapped cell
+            // from running into the row below it.
+            const rowHeight = Math.max(...cells.map(c => doc.heightOfString(c.text, { width: c.width })));
+
             // Page-break guard — without this, rows silently run off the bottom of the page.
-            if (doc.y > 760) {
+            if (doc.y + rowHeight > 780) {
                 doc.addPage();
             }
             const y = doc.y;
-            doc.text(row.donor_org || '-', colX.donor, y, { width: 100 });
-            doc.text(row.food_type || '-', colX.food, y, { width: 90 });
-            doc.text(String(row.quantity_distributed || '-'), colX.qty, y, { width: 60 });
-            doc.text(row.recipient_group || '-', colX.recipient, y, { width: 110 });
-            doc.text(new Date(row.distributed_at).toLocaleDateString(), colX.date, y, { width: 100 });
-            doc.moveDown(0.8);
+            cells.forEach(c => doc.text(c.text, c.x, y, { width: c.width }));
+            doc.y = y + rowHeight + 6;
         });
 
         doc.end();

@@ -1,10 +1,10 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import client from '../../api/client';
+import client, { errorMessage } from '../../api/client';
 import Navbar from '../../components/Navbar';
 
 const StatCard = ({ label, value, sub, color = 'text-brand-600' }) => (
-    <div className="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
+    <div className="bg-white rounded-lg shadow-sm p-5 border border-gray-100">
         <p className={`text-3xl font-bold ${color}`}>{value}</p>
         <p className="text-sm font-medium text-gray-700 mt-1">{label}</p>
         {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
@@ -22,7 +22,7 @@ export default function AdminDashboard() {
                 const { data } = await client.get('/analytics/summary');
                 setSummary(data);
             } catch (err) {
-                setError(err.response?.data?.error || 'Failed to load');
+                setError(errorMessage(err, 'Failed to load dashboard'));
             } finally {
                 setLoading(false);
             }
@@ -41,8 +41,14 @@ export default function AdminDashboard() {
             a.download = `foodbridge-distributions.${type}`;
             a.click();
             window.URL.revokeObjectURL(url);
-        } catch {
-            alert('Download failed');
+        } catch (err) {
+            // responseType 'blob' also turns the JSON error body into a Blob, so read it back
+            // to show the real reason (for example, no records to export).
+            let message = errorMessage(err, 'Download failed');
+            try {
+                message = JSON.parse(await err.response.data.text()).error || message;
+            } catch { /* not a JSON body, keep the message above */ }
+            alert(message);
         }
     };
 
@@ -102,7 +108,7 @@ export default function AdminDashboard() {
 
                 {/* Rates */}
                 <div className="grid grid-cols-2 gap-4 mb-8">
-                    <div className="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
+                    <div className="bg-white rounded-lg shadow-sm p-5 border border-gray-100">
                         <p className="text-sm font-medium text-gray-500 mb-2">Collection rate</p>
                         <div className="w-full bg-gray-100 rounded-full h-3">
                             <div
@@ -114,7 +120,7 @@ export default function AdminDashboard() {
                             {summary.rates.collection_rate}%
                         </p>
                     </div>
-                    <div className="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
+                    <div className="bg-white rounded-lg shadow-sm p-5 border border-gray-100">
                         <p className="text-sm font-medium text-gray-500 mb-2">Waste rate</p>
                         <div className="w-full bg-gray-100 rounded-full h-3">
                             <div
@@ -137,7 +143,7 @@ export default function AdminDashboard() {
                         { label: 'Distributed', value: fp.distributed, color: 'bg-green-50 text-green-700' },
                         { label: 'Expired', value: fp.expired, color: 'bg-red-50 text-red-700' },
                     ].map(s => (
-                        <div key={s.label} className={`rounded-xl p-4 text-center ${s.color}`}>
+                        <div key={s.label} className={`rounded-lg p-4 text-center ${s.color}`}>
                             <p className="text-2xl font-bold">{s.value}</p>
                             <p className="text-xs font-medium mt-1">{s.label}</p>
                         </div>
@@ -145,26 +151,35 @@ export default function AdminDashboard() {
                 </div>
 
                 {/* Top donors */}
-                <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
                     <div className="px-6 py-4 border-b border-gray-100">
                         <h2 className="font-semibold text-gray-800">Top Donors</h2>
                     </div>
-                    <table className="w-full text-sm">
-                        <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
-                        <tr>
-                            <th className="px-6 py-3 text-left">Organisation</th>
-                            <th className="px-6 py-3 text-left">Posts donated</th>
-                        </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-100">
-                        {summary.top_donors.map((d, i) => (
-                            <tr key={i} className="hover:bg-gray-50">
-                                <td className="px-6 py-3 font-medium text-gray-800">{d.org_name}</td>
-                                <td className="px-6 py-3 text-gray-600">{d.posts_donated}</td>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                            <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
+                            <tr>
+                                <th className="px-6 py-3 text-left">Organisation</th>
+                                <th className="px-6 py-3 text-left">Posts donated</th>
                             </tr>
-                        ))}
-                        </tbody>
-                    </table>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100">
+                            {summary.top_donors.length === 0 && (
+                                <tr>
+                                    <td colSpan={2} className="px-6 py-10 text-center text-gray-400">
+                                        No donations yet.
+                                    </td>
+                                </tr>
+                            )}
+                            {summary.top_donors.map((d, i) => (
+                                <tr key={i} className="hover:bg-gray-50">
+                                    <td className="px-6 py-3 font-medium text-gray-800">{d.org_name}</td>
+                                    <td className="px-6 py-3 text-gray-600">{d.posts_donated}</td>
+                                </tr>
+                            ))}
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
 
                 {/* Quick links */}
@@ -175,7 +190,7 @@ export default function AdminDashboard() {
                         { label: 'Log Distribution', to: '/admin/distributions', color: 'bg-green-600' },
                     ].map(link => (
                         <Link key={link.to} to={link.to}
-                              className={`${link.color} text-white rounded-xl p-4 text-center
+                              className={`${link.color} text-white rounded-lg p-4 text-center
                           font-medium text-sm hover:opacity-90 transition-opacity`}>
                             {link.label}
                         </Link>

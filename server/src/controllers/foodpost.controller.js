@@ -59,17 +59,25 @@ const listFoodPosts = async (req, res) => {
     }
 };
 
-// GET /api/food-posts/:id
+// GET /api/food-posts/:id  (donor sees own, admin sees any)
 const getFoodPost = async (req, res) => {
     try {
-        const [[post]] = await pool.execute(
-            `SELECT fp.*, d.org_name, u.name AS donor_name
-       FROM food_posts fp
-       JOIN donors d ON d.id = fp.donor_id
-       JOIN users u ON u.id = d.user_id
-       WHERE fp.id = ?`,
-            [req.params.id]
-        );
+        let query = `
+      SELECT fp.*, d.org_name, u.name AS donor_name
+      FROM food_posts fp
+      JOIN donors d ON d.id = fp.donor_id
+      JOIN users u ON u.id = d.user_id
+      WHERE fp.id = ?
+    `;
+        const params = [req.params.id];
+
+        // Same rule as the list endpoint — a donor must not read another donor's post by guessing its id.
+        if (req.user.role === 'donor') {
+            query += ' AND u.id = ?';
+            params.push(req.user.id);
+        }
+
+        const [[post]] = await pool.execute(query, params);
         if (!post) return res.status(404).json({ error: 'Food post not found' });
         res.json(post);
     } catch (err) {
@@ -80,7 +88,11 @@ const getFoodPost = async (req, res) => {
 
 // PATCH /api/food-posts/:id  (donor, own post, only while available)
 const updateFoodPost = async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
+
     try {
+        const body = req.body || {};
         const [[post]] = await pool.execute(
             `SELECT fp.* FROM food_posts fp
        JOIN donors d ON d.id = fp.donor_id
@@ -96,16 +108,29 @@ const updateFoodPost = async (req, res) => {
         const values = [];
 
         fields.forEach(f => {
-            if (req.body[f] !== undefined) {
+            if (body[f] !== undefined) {
                 updates.push(`${f} = ?`);
-                values.push(req.body[f]);
+                values.push(body[f]);
             }
         });
 
         if (updates.length === 0) return res.status(400).json({ error: 'No valid fields to update' });
 
+        // Compare against the stored value when only one end of the window is being changed.
+        const start = new Date(body.pickup_window_start ?? post.pickup_window_start);
+        const end = new Date(body.pickup_window_end ?? post.pickup_window_end);
+        if (end <= start)
+            return res.status(400).json({ error: 'pickup_window_end must be after pickup_window_start' });
+
+        // Re-check the status in the UPDATE itself — an admin may have assigned the post
+        // between the SELECT above and this statement.
         values.push(req.params.id);
-        await pool.execute(`UPDATE food_posts SET ${updates.join(', ')} WHERE id = ?`, values);
+        const [result] = await pool.execute(
+            `UPDATE food_posts SET ${updates.join(', ')} WHERE id = ? AND status = 'available'`,
+            values
+        );
+        if (result.affectedRows === 0)
+            return res.status(400).json({ error: 'Can only edit posts that are still available' });
 
         res.json({ message: 'Food post updated' });
     } catch (err) {

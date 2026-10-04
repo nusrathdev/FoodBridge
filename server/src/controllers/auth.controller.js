@@ -10,10 +10,11 @@ const register = async (req, res) => {
         return res.status(400).json({ errors: errors.array() });
 
     const { name, email, password, role, org_name, food_handling_cert } = req.body;
+    const conn = await pool.getConnection();
 
     try {
         // check if email already exists
-        const [[existing]] = await pool.execute(
+        const [[existing]] = await conn.execute(
             'SELECT id FROM users WHERE email = ?', [email]
         );
         if (existing)
@@ -22,23 +23,36 @@ const register = async (req, res) => {
         const id = uuidv4();
         const hash = await bcrypt.hash(password, +process.env.BCRYPT_ROUNDS);
 
-        await pool.execute(
+        // The user row and the donor row are written together or not at all. Without the
+        // transaction, a failed donor insert leaves an account that can log in but has no
+        // donor profile and can never be re-registered.
+        await conn.beginTransaction();
+
+        await conn.execute(
             'INSERT INTO users (id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?)',
             [id, name, email, hash, role]
         );
 
         // if donor, create donor record
         if (role === 'donor') {
-            await pool.execute(
+            await conn.execute(
                 'INSERT INTO donors (id, user_id, org_name, food_handling_cert) VALUES (?, ?, ?, ?)',
-                [uuidv4(), id, org_name ?? null, food_handling_cert ?? null]
+                [uuidv4(), id, org_name ?? null, food_handling_cert || null]
             );
         }
 
+        await conn.commit();
         res.status(201).json({ message: 'Registered successfully' });
     } catch (err) {
+        await conn.rollback();
+        // Two registrations for the same email at the same instant both pass the check above;
+        // the UNIQUE constraint on users.email catches the second one.
+        if (err.code === 'ER_DUP_ENTRY')
+            return res.status(409).json({ error: 'Email already registered' });
         console.error(err);
         res.status(500).json({ error: 'Server error' });
+    } finally {
+        conn.release();
     }
 };
 
@@ -76,8 +90,10 @@ const me = async (req, res) => {
             'SELECT id, name, email, role, created_at FROM users WHERE id = ?',
             [req.user.id]
         );
+        if (!user) return res.status(404).json({ error: 'User not found' });
         res.json(user);
     } catch (err) {
+        console.error(err);
         res.status(500).json({ error: 'Server error' });
     }
 };

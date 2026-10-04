@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
-import client from '../../api/client';
+import { useNavigate, Link, Navigate } from 'react-router-dom';
+import client, { errorMessage } from '../../api/client';
+import { useAuth } from '../../context/useAuth';
 
 export default function Register() {
+    const { user } = useAuth();
     const navigate = useNavigate();
     const [form, setForm] = useState({
         name: '', email: '', password: '', role: 'donor',
@@ -19,16 +21,17 @@ export default function Register() {
             await client.post('/auth/register', form);
             navigate('/login');
         } catch (err) {
-            const errs = err.response?.data?.errors;
-            setError(errs ? errs.map(e => e.msg).join(', ') : err.response?.data?.error || 'Registration failed');
+            setError(errorMessage(err, 'Registration failed'));
         } finally {
             setLoading(false);
         }
     };
 
+    if (user) return <Navigate to="/" replace />;
+
     return (
         <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4 py-8">
-            <div className="bg-white rounded-xl shadow p-8 w-full max-w-md">
+            <div className="bg-white rounded-lg shadow p-8 w-full max-w-md">
                 <h1 className="text-2xl font-bold text-gray-900 mb-1">Create account</h1>
                 <p className="text-gray-500 text-sm mb-6">Join FoodBridge as a donor or volunteer</p>
 

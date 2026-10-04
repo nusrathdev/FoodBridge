@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import client from '../../api/client';
+import { useState, useEffect, useCallback } from 'react';
+import client, { errorMessage } from '../../api/client';
 import Navbar from '../../components/Navbar';
 import StatusBadge from '../../components/StatusBadge';
 
@@ -10,26 +10,31 @@ export default function TaskAssignment() {
     const [loading, setLoading] = useState(true);
     const [assigning, setAssigning] = useState(null);
     const [selected, setSelected] = useState({});
+    const [error, setError] = useState('');
+
+    const loadAll = useCallback(async () => {
+        const [postsRes, volRes, tasksRes] = await Promise.all([
+            client.get('/food-posts'),
+            client.get('/volunteers'),
+            client.get('/tasks'),
+        ]);
+        setPosts(postsRes.data.filter(p => p.status === 'available'));
+        setVolunteers(volRes.data);
+        setTasks(tasksRes.data);
+    }, []);
 
     useEffect(() => {
         const fetchAll = async () => {
             try {
-                const [postsRes, volRes, tasksRes] = await Promise.all([
-                    client.get('/food-posts'),
-                    client.get('/volunteers'),
-                    client.get('/tasks'),
-                ]);
-                setPosts(postsRes.data.filter(p => p.status === 'available'));
-                setVolunteers(volRes.data);
-                setTasks(tasksRes.data);
+                await loadAll();
             } catch (err) {
-                console.error(err);
+                setError(errorMessage(err, 'Failed to load tasks'));
             } finally {
                 setLoading(false);
             }
         };
         fetchAll();
-    }, []);
+    }, [loadAll]);
 
     const assign = async (postId) => {
         const volunteerId = selected[postId];
@@ -40,16 +45,13 @@ export default function TaskAssignment() {
                 food_post_id: postId,
                 volunteer_id: volunteerId,
             });
-            // refresh lists
-            const [postsRes, tasksRes] = await Promise.all([
-                client.get('/food-posts'),
-                client.get('/tasks'),
-            ]);
-            setPosts(postsRes.data.filter(p => p.status === 'available'));
-            setTasks(tasksRes.data);
             setSelected(s => { const n = { ...s }; delete n[postId]; return n; });
+            // refresh lists, including volunteers so their "active" counts stay correct
+            await loadAll();
         } catch (err) {
-            alert(err.response?.data?.error || 'Failed to assign');
+            alert(errorMessage(err, 'Failed to assign'));
+            // The usual cause is another admin assigning the same post first. Reload so it disappears.
+            loadAll().catch(() => {});
         } finally {
             setAssigning(null);
         }
@@ -60,6 +62,15 @@ export default function TaskAssignment() {
             <Navbar />
             <div className="flex items-center justify-center h-64">
                 <p className="text-gray-400">Loading...</p>
+            </div>
+        </div>
+    );
+
+    if (error) return (
+        <div className="min-h-screen bg-gray-50">
+            <Navbar />
+            <div className="flex items-center justify-center h-64">
+                <p className="text-red-500">{error}</p>
             </div>
         </div>
     );
@@ -76,19 +87,19 @@ export default function TaskAssignment() {
                         Available Food Posts ({posts.length})
                     </h2>
                     {posts.length === 0 ? (
-                        <div className="bg-white rounded-xl shadow-sm px-6 py-10 text-center text-gray-400">
+                        <div className="bg-white rounded-lg shadow-sm px-6 py-10 text-center text-gray-400">
                             No available food posts to assign.
                         </div>
                     ) : (
                         <div className="space-y-3">
                             {posts.map(post => (
                                 <div key={post.id}
-                                     className="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
+                                     className="bg-white rounded-lg shadow-sm p-5 border border-gray-100">
                                     <div className="flex flex-col md:flex-row md:items-center gap-4">
                                         <div className="flex-1 space-y-1">
                                             <p className="font-semibold text-gray-800">{post.food_type}</p>
                                             <p className="text-sm text-gray-500">
-                                                {post.quantity} · {post.pickup_address}
+                                                {post.quantity}, pickup at {post.pickup_address}
                                             </p>
                                             <p className="text-xs text-gray-400">
                                                 Donor: {post.donor_name} ({post.org_name})
@@ -131,11 +142,11 @@ export default function TaskAssignment() {
                         All Tasks ({tasks.length})
                     </h2>
                     {tasks.length === 0 ? (
-                        <div className="bg-white rounded-xl shadow-sm px-6 py-10 text-center text-gray-400">
+                        <div className="bg-white rounded-lg shadow-sm px-6 py-10 text-center text-gray-400">
                             No tasks yet.
                         </div>
                     ) : (
-                        <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                        <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-x-auto">
                             <table className="w-full text-sm">
                                 <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
                                 <tr>
