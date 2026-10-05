@@ -6,21 +6,26 @@ import StatusBadge from '../../components/StatusBadge';
 export default function TaskAssignment() {
     const [posts, setPosts] = useState([]);
     const [volunteers, setVolunteers] = useState([]);
+    const [recipients, setRecipients] = useState([]);
     const [tasks, setTasks] = useState([]);
     const [loading, setLoading] = useState(true);
     const [assigning, setAssigning] = useState(null);
+    // per food post: { volunteer_id, recipient_id }
     const [selected, setSelected] = useState({});
     const [error, setError] = useState('');
 
     const loadAll = useCallback(async () => {
-        const [postsRes, volRes, tasksRes] = await Promise.all([
+        const [postsRes, volRes, tasksRes, recRes] = await Promise.all([
             client.get('/food-posts'),
             client.get('/volunteers'),
             client.get('/tasks'),
+            client.get('/recipients'),
         ]);
         setPosts(postsRes.data.filter(p => p.status === 'available'));
         setVolunteers(volRes.data);
         setTasks(tasksRes.data);
+        // retired recipients stay in history but can't receive new deliveries
+        setRecipients(recRes.data.filter(r => r.active));
     }, []);
 
     useEffect(() => {
@@ -36,14 +41,19 @@ export default function TaskAssignment() {
         fetchAll();
     }, [loadAll]);
 
+    const choose = (postId, field, value) =>
+        setSelected(s => ({ ...s, [postId]: { ...s[postId], [field]: value } }));
+
     const assign = async (postId) => {
-        const volunteerId = selected[postId];
-        if (!volunteerId) return alert('Please select a volunteer');
+        const { volunteer_id, recipient_id } = selected[postId] || {};
+        if (!volunteer_id) return alert('Please select a volunteer');
         setAssigning(postId);
         try {
             await client.post('/tasks', {
                 food_post_id: postId,
-                volunteer_id: volunteerId,
+                volunteer_id,
+                // optional: the volunteer makes the final choice when delivering
+                recipient_id: recipient_id || undefined,
             });
             setSelected(s => { const n = { ...s }; delete n[postId]; return n; });
             // refresh lists, including volunteers so their "active" counts stay correct
@@ -108,10 +118,11 @@ export default function TaskAssignment() {
                                                 Pickup: {new Date(post.pickup_window_start).toLocaleString()}
                                             </p>
                                         </div>
-                                        <div className="flex gap-2 items-center">
+                                        <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
                                             <select
-                                                value={selected[post.id] || ''}
-                                                onChange={e => setSelected(s => ({ ...s, [post.id]: e.target.value }))}
+                                                aria-label="Volunteer"
+                                                value={selected[post.id]?.volunteer_id || ''}
+                                                onChange={e => choose(post.id, 'volunteer_id', e.target.value)}
                                                 className="border border-gray-300 rounded-lg px-3 py-2 text-sm
                                    focus:outline-none focus:ring-2 focus:ring-brand-500">
                                                 <option value="">Select volunteer</option>
@@ -121,6 +132,19 @@ export default function TaskAssignment() {
                                                     </option>
                                                 ))}
                                             </select>
+                                            {recipients.length > 0 && (
+                                                <select
+                                                    aria-label="Suggested destination"
+                                                    value={selected[post.id]?.recipient_id || ''}
+                                                    onChange={e => choose(post.id, 'recipient_id', e.target.value)}
+                                                    className="border border-gray-300 rounded-lg px-3 py-2 text-sm
+                                       focus:outline-none focus:ring-2 focus:ring-brand-500">
+                                                    <option value="">Destination: volunteer decides</option>
+                                                    {recipients.map(r => (
+                                                        <option key={r.id} value={r.id}>Suggest: {r.name}</option>
+                                                    ))}
+                                                </select>
+                                            )}
                                             <button
                                                 onClick={() => assign(post.id)}
                                                 disabled={assigning === post.id}
@@ -153,6 +177,7 @@ export default function TaskAssignment() {
                                     <th className="px-6 py-3 text-left">Food</th>
                                     <th className="px-6 py-3 text-left">Donor</th>
                                     <th className="px-6 py-3 text-left">Volunteer</th>
+                                    <th className="px-6 py-3 text-left">Destination</th>
                                     <th className="px-6 py-3 text-left">Assigned</th>
                                     <th className="px-6 py-3 text-left">Status</th>
                                 </tr>
@@ -165,6 +190,13 @@ export default function TaskAssignment() {
                                         </td>
                                         <td className="px-6 py-3 text-gray-600">{task.donor_org}</td>
                                         <td className="px-6 py-3 text-gray-600">{task.volunteer_name}</td>
+                                        <td className="px-6 py-3 text-gray-600">
+                                            {task.delivered_to
+                                                ? task.delivered_to
+                                                : task.recipient_name
+                                                    ? `${task.recipient_name} (suggested)`
+                                                    : <span className="text-gray-400">Volunteer decides</span>}
+                                        </td>
                                         <td className="px-6 py-3 text-gray-400 text-xs">
                                             {new Date(task.assigned_at).toLocaleDateString()}
                                         </td>

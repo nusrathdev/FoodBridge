@@ -39,13 +39,13 @@ async function getDistributionRecords({ from, to } = {}) {
       fp.quantity AS original_quantity,
       donor.org_name AS donor_org,
       vol.name AS collected_by_volunteer,
-      admin.name AS logged_by_admin
+      recorder.name AS recorded_by
     FROM distributions dist
     JOIN collection_tasks t ON t.id = dist.task_id
     JOIN food_posts fp ON fp.id = t.food_post_id
     JOIN donors donor ON donor.id = fp.donor_id
     JOIN users vol ON vol.id = t.volunteer_id
-    JOIN users admin ON admin.id = dist.distributed_by
+    JOIN users recorder ON recorder.id = dist.distributed_by
     ${clause}
     ORDER BY dist.distributed_at DESC
     `,

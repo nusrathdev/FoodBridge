@@ -3,18 +3,12 @@ const { v4: uuidv4 } = require('uuid');
 const { validationResult } = require('express-validator');
 
 // Legal forward-only transitions. Anything not listed here is rejected.
-// const ALLOWED_TRANSITIONS = {
-//     assigned: ['collected', 'cancelled'],
-//     collected: ['delivered'],
-//     delivered: [], // terminal state — no further changes
-//     cancelled: [], // terminal state
-// };
-
+// The volunteer who hands the food over marks it delivered, and that same step records the distribution.
 const ALLOWED_TRANSITIONS = {
     assigned: ['collected', 'cancelled'],
-    collected: [], // delivered is now only set via POST /api/distributions, not by the volunteer directly
-    delivered: [],
-    cancelled: [],
+    collected: ['delivered'],
+    delivered: [], // terminal state — no further changes
+    cancelled: [], // terminal state
 };
 
 // POST /api/tasks  (admin only)
@@ -22,7 +16,7 @@ const createTask = async (req, res) => {
     const errors = validationResult(req);
     if (!errors.isEmpty()) return res.status(400).json({ errors: errors.array() });
 
-    const { food_post_id, volunteer_id } = req.body;
+    const { food_post_id, volunteer_id, recipient_id } = req.body;
     const conn = await pool.getConnection();
 
     try {
@@ -58,11 +52,28 @@ const createTask = async (req, res) => {
             return res.status(404).json({ error: 'Volunteer not found' });
         }
 
+        // Optional suggested destination. The volunteer makes the final choice when delivering,
+        // because they often know a place that needs food right now.
+        if (recipient_id) {
+            const [[recipient]] = await conn.execute(
+                'SELECT id, active FROM recipients WHERE id = ?',
+                [recipient_id]
+            );
+            if (!recipient) {
+                await conn.rollback();
+                return res.status(404).json({ error: 'Recipient not found' });
+            }
+            if (!recipient.active) {
+                await conn.rollback();
+                return res.status(409).json({ error: 'This recipient is no longer active' });
+            }
+        }
+
         const taskId = uuidv4();
         await conn.execute(
-            `INSERT INTO collection_tasks (id, food_post_id, volunteer_id, assigned_by, status)
-       VALUES (?, ?, ?, ?, 'assigned')`,
-            [taskId, food_post_id, volunteer_id, req.user.id]
+            `INSERT INTO collection_tasks (id, food_post_id, volunteer_id, assigned_by, recipient_id, status)
+       VALUES (?, ?, ?, ?, ?, 'assigned')`,
+            [taskId, food_post_id, volunteer_id, req.user.id, recipient_id || null]
         );
 
         await conn.execute(
@@ -98,11 +109,16 @@ const listTasks = async (req, res) => {
              fp.id AS food_post_id, fp.food_type, fp.quantity, fp.pickup_address,
              fp.pickup_window_start, fp.pickup_window_end,
              vol.name AS volunteer_name, vol.id AS volunteer_id,
-             d.org_name AS donor_org
+             d.org_name AS donor_org,
+             t.recipient_id, r.name AS recipient_name, r.address AS recipient_address,
+             r.contact_phone AS recipient_phone,
+             dist.recipient_group AS delivered_to, dist.quantity_distributed
       FROM collection_tasks t
       JOIN food_posts fp ON fp.id = t.food_post_id
       JOIN users vol ON vol.id = t.volunteer_id
       JOIN donors d ON d.id = fp.donor_id
+      LEFT JOIN recipients r ON r.id = t.recipient_id
+      LEFT JOIN distributions dist ON dist.task_id = t.id
     `;
         const params = [];
 
@@ -155,6 +171,50 @@ const updateTaskStatus = async (req, res) => {
             });
         }
 
+        // Delivering records who received the food. The volunteer either picks a recipient from
+        // the NGO's list or describes the place themselves (e.g. street people at a station).
+        if (nextStatus === 'delivered') {
+            const { recipient_id, quantity_distributed, notes } = req.body;
+            let recipientId = null;
+            let recipientGroup = req.body.recipient_group;
+
+            if (recipient_id) {
+                const [[recipient]] = await conn.execute(
+                    'SELECT id, name, active FROM recipients WHERE id = ?',
+                    [recipient_id]
+                );
+                if (!recipient) {
+                    await conn.rollback();
+                    return res.status(404).json({ error: 'Recipient not found' });
+                }
+                if (!recipient.active) {
+                    await conn.rollback();
+                    return res.status(409).json({ error: 'This recipient is no longer active' });
+                }
+                recipientId = recipient.id;
+                recipientGroup = recipient.name;
+            } else if (!recipientGroup) {
+                await conn.rollback();
+                return res.status(400).json({ error: 'Choose a recipient from the list or describe who received the food' });
+            }
+
+            // One distribution per task. The row lock above already serialises double clicks,
+            // this guards against data written some other way.
+            const [[existingDist]] = await conn.execute(
+                'SELECT id FROM distributions WHERE task_id = ?', [id]
+            );
+            if (existingDist) {
+                await conn.rollback();
+                return res.status(409).json({ error: 'A distribution has already been recorded for this task' });
+            }
+
+            await conn.execute(
+                `INSERT INTO distributions (id, task_id, recipient_id, recipient_group, quantity_distributed, distributed_by, notes)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                [uuidv4(), id, recipientId, recipientGroup, quantity_distributed, req.user.id, notes || null]
+            );
+        }
+
         const timestampColumn = nextStatus === 'collected' ? 'collected_at'
             : nextStatus === 'delivered' ? 'delivered_at'
                 : null;
@@ -174,6 +234,8 @@ const updateTaskStatus = async (req, res) => {
         // Keep food_posts.status in sync with the task lifecycle.
         if (nextStatus === 'collected') {
             await conn.execute('UPDATE food_posts SET status = ? WHERE id = ?', ['collected', task.food_post_id]);
+        } else if (nextStatus === 'delivered') {
+            await conn.execute('UPDATE food_posts SET status = ? WHERE id = ?', ['distributed', task.food_post_id]);
         } else if (nextStatus === 'cancelled') {
             // Volunteer dropped out — release the post back to the pool instead of leaving it stuck.
             await conn.execute('UPDATE food_posts SET status = ? WHERE id = ?', ['available', task.food_post_id]);

@@ -12,6 +12,7 @@ const distributionRoutes = require('./routes/distribution.routes');
 const analyticsRoutes = require('./routes/analytics.routes');
 const reportRoutes = require('./routes/report.routes');
 const authRoutes = require('./routes/auth.routes');
+const recipientRoutes = require('./routes/recipient.routes');
 
 const app = express();
 
@@ -51,6 +52,7 @@ app.use('/api/volunteers', volunteerRoutes);
 app.use('/api/distributions', distributionRoutes);
 app.use('/api/analytics', analyticsRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/recipients', recipientRoutes);
 
 // --- Explicit 404 for anything unmatched ---
 app.use((req, res) => {

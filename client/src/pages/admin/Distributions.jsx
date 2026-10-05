@@ -2,19 +2,12 @@ import { useState, useEffect, useCallback } from 'react';
 import client, { errorMessage } from '../../api/client';
 import Navbar from '../../components/Navbar';
 
+// Volunteers record each distribution themselves when they mark a task delivered.
+// This page lets the admin follow food that is on its way and review what was handed out.
 export default function Distributions() {
     const [distributions, setDistributions] = useState([]);
-    const [collectedTasks, setCollectedTasks] = useState([]);
+    const [onTheWay, setOnTheWay] = useState([]);
     const [loading, setLoading] = useState(true);
-    const [form, setForm] = useState({
-        task_id: '',
-        recipient_group: '',
-        quantity_distributed: '',
-        notes: '',
-    });
-    const [submitting, setSubmitting] = useState(false);
-    const [error, setError] = useState('');
-    const [success, setSuccess] = useState('');
     const [loadError, setLoadError] = useState('');
 
     const loadAll = useCallback(async () => {
@@ -23,11 +16,9 @@ export default function Distributions() {
             client.get('/tasks'),
         ]);
         setDistributions(distRes.data);
-        setCollectedTasks(tasksRes.data.filter(t => t.status === 'collected'));
+        setOnTheWay(tasksRes.data.filter(t => t.status === 'collected'));
     }, []);
 
-    // `loading` covers the first load only. Later refreshes update the lists in place, so the
-    // page (and the success message) does not blank out after each submit.
     useEffect(() => {
         const fetchAll = async () => {
             try {
@@ -40,23 +31,6 @@ export default function Distributions() {
         };
         fetchAll();
     }, [loadAll]);
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setError('');
-        setSuccess('');
-        setSubmitting(true);
-        try {
-            await client.post('/distributions', form);
-            setSuccess('Distribution logged successfully');
-            setForm({ task_id: '', recipient_group: '', quantity_distributed: '', notes: '' });
-            await loadAll();
-        } catch (err) {
-            setError(errorMessage(err, 'Failed to log distribution'));
-        } finally {
-            setSubmitting(false);
-        }
-    };
 
     if (loading) return (
         <div className="min-h-screen bg-gray-50">
@@ -80,107 +54,49 @@ export default function Distributions() {
         <div className="min-h-screen bg-gray-50">
             <Navbar />
             <div className="max-w-5xl mx-auto px-4 py-8">
-                <h1 className="text-2xl font-bold text-gray-900 mb-8">Distributions</h1>
+                <h1 className="text-2xl font-bold text-gray-900 mb-1">Distributions</h1>
+                <p className="text-gray-500 text-sm mb-8">
+                    Volunteers record who received the food when they mark a task delivered.
+                </p>
 
-                {/* Shown outside the form: the form disappears once the last collected task is logged,
-                    and the confirmation must not disappear with it. */}
-                {success && (
-                    <div className="bg-green-50 border border-green-200 text-green-700 text-sm
-                          px-4 py-3 rounded-lg mb-6">
-                        {success}
+                {/* Collected but not yet handed over */}
+                <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden mb-8">
+                    <div className="px-6 py-4 border-b border-gray-100">
+                        <h2 className="font-semibold text-gray-800">On the Way ({onTheWay.length})</h2>
                     </div>
-                )}
-
-                {/* Log new distribution */}
-                {collectedTasks.length > 0 ? (
-                    <div className="bg-white rounded-lg shadow-sm p-6 border border-gray-100 mb-8">
-                        <h2 className="font-semibold text-gray-800 mb-4">Log New Distribution</h2>
-
-                        {error && (
-                            <div className="bg-red-50 border border-red-200 text-red-700 text-sm
-                              px-4 py-3 rounded-lg mb-4">
-                                {error}
-                            </div>
-                        )}
-
-                        <form onSubmit={handleSubmit} className="space-y-4">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Collected task <span className="text-red-500">*</span>
-                                </label>
-                                <select
-                                    required
-                                    value={form.task_id}
-                                    onChange={e => setForm(f => ({ ...f, task_id: e.target.value }))}
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm
-                             focus:outline-none focus:ring-2 focus:ring-brand-500">
-                                    <option value="">Select a collected task</option>
-                                    {collectedTasks.map(t => (
-                                        <option key={t.id} value={t.id}>
-                                            {t.food_type}, collected by {t.volunteer_name}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Recipient group <span className="text-red-500">*</span>
-                                </label>
-                                <input
-                                    required
-                                    value={form.recipient_group}
-                                    onChange={e => setForm(f => ({ ...f, recipient_group: e.target.value }))}
-                                    placeholder="e.g. Galle Road Community Shelter"
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm
-                             focus:outline-none focus:ring-2 focus:ring-brand-500"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Quantity distributed <span className="text-red-500">*</span>
-                                </label>
-                                <input
-                                    required
-                                    value={form.quantity_distributed}
-                                    onChange={e => setForm(f => ({ ...f, quantity_distributed: e.target.value }))}
-                                    placeholder="e.g. 48 packets"
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm
-                             focus:outline-none focus:ring-2 focus:ring-brand-500"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Notes <span className="text-gray-400 font-normal">(optional)</span>
-                                </label>
-                                <textarea
-                                    value={form.notes}
-                                    onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
-                                    rows={2}
-                                    placeholder="Any remarks about this distribution..."
-                                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm
-                             focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
-                                />
-                            </div>
-
-                            <button
-                                type="submit"
-                                disabled={submitting}
-                                className="w-full bg-brand-600 hover:bg-brand-700 text-white font-medium
-                           py-2 rounded-lg transition-colors disabled:opacity-50">
-                                {submitting ? 'Logging...' : 'Log distribution'}
-                            </button>
-                        </form>
-                    </div>
-                ) : (
-                    <div className="bg-white rounded-lg shadow-sm border border-gray-100 px-6 py-5 mb-8
-                          text-sm text-gray-500">
-                        Nothing to log right now. A distribution can be logged once a volunteer
-                        has marked a task as collected.
-                    </div>
-                )}
+                    {onTheWay.length === 0 ? (
+                        <div className="px-6 py-10 text-center text-gray-400 text-sm">
+                            No collected food is waiting to be delivered.
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                                <thead className="bg-gray-50 text-gray-500 text-xs uppercase">
+                                <tr>
+                                    <th className="px-6 py-3 text-left">Food</th>
+                                    <th className="px-6 py-3 text-left">Volunteer</th>
+                                    <th className="px-6 py-3 text-left">Collected</th>
+                                    <th className="px-6 py-3 text-left">Suggested destination</th>
+                                </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-100">
+                                {onTheWay.map(t => (
+                                    <tr key={t.id} className="hover:bg-gray-50">
+                                        <td className="px-6 py-3 font-medium text-gray-800">{t.food_type}</td>
+                                        <td className="px-6 py-3 text-gray-600">{t.volunteer_name}</td>
+                                        <td className="px-6 py-3 text-gray-400 text-xs">
+                                            {t.collected_at ? new Date(t.collected_at).toLocaleString() : '-'}
+                                        </td>
+                                        <td className="px-6 py-3 text-gray-600">
+                                            {t.recipient_name || <span className="text-gray-400">Volunteer decides</span>}
+                                        </td>
+                                    </tr>
+                                ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
 
                 {/* Distribution history */}
                 <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
@@ -191,7 +107,7 @@ export default function Distributions() {
                     </div>
                     {distributions.length === 0 ? (
                         <div className="px-6 py-16 text-center text-gray-400 text-sm">
-                            No distributions logged yet.
+                            No distributions recorded yet.
                         </div>
                     ) : (
                         <div className="overflow-x-auto">
@@ -200,10 +116,11 @@ export default function Distributions() {
                                 <tr>
                                     <th className="px-6 py-3 text-left">Food</th>
                                     <th className="px-6 py-3 text-left">Donor</th>
-                                    <th className="px-6 py-3 text-left">Recipient</th>
+                                    <th className="px-6 py-3 text-left">Received by</th>
                                     <th className="px-6 py-3 text-left">Qty</th>
                                     <th className="px-6 py-3 text-left">Date</th>
                                     <th className="px-6 py-3 text-left">Volunteer</th>
+                                    <th className="px-6 py-3 text-left">Notes</th>
                                 </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
@@ -217,6 +134,7 @@ export default function Distributions() {
                                             {new Date(d.distributed_at).toLocaleDateString()}
                                         </td>
                                         <td className="px-6 py-3 text-gray-600">{d.collected_by_volunteer}</td>
+                                        <td className="px-6 py-3 text-gray-500 text-xs">{d.notes || '-'}</td>
                                     </tr>
                                 ))}
                                 </tbody>

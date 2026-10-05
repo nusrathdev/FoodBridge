@@ -36,30 +36,46 @@ CREATE TABLE food_posts (
                             CONSTRAINT fk_food_posts_donor FOREIGN KEY (donor_id) REFERENCES donors(id) ON DELETE CASCADE
 );
 
+-- The places the NGO delivers food to. `active` retires a recipient without deleting its history.
+CREATE TABLE recipients (
+                            id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
+                            name VARCHAR(200) NOT NULL UNIQUE,
+                            address TEXT NOT NULL,
+                            contact_phone VARCHAR(50),
+                            active BOOLEAN NOT NULL DEFAULT TRUE,
+                            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE collection_tasks (
                                   id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
                                   food_post_id CHAR(36) NOT NULL,
                                   volunteer_id CHAR(36) NOT NULL,
                                   assigned_by CHAR(36) NOT NULL,
+                                  -- where the volunteer takes the food; required by the API for new tasks
+                                  recipient_id CHAR(36),
                                   status ENUM('assigned','collected','delivered','cancelled') DEFAULT 'assigned',
                                   assigned_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                                   collected_at TIMESTAMP,
                                   delivered_at TIMESTAMP,
                                   CONSTRAINT fk_tasks_food_post FOREIGN KEY (food_post_id) REFERENCES food_posts(id) ON DELETE CASCADE,
                                   CONSTRAINT fk_tasks_volunteer FOREIGN KEY (volunteer_id) REFERENCES users(id),
-                                  CONSTRAINT fk_tasks_assigned_by FOREIGN KEY (assigned_by) REFERENCES users(id)
+                                  CONSTRAINT fk_tasks_assigned_by FOREIGN KEY (assigned_by) REFERENCES users(id),
+                                  CONSTRAINT fk_tasks_recipient FOREIGN KEY (recipient_id) REFERENCES recipients(id)
 );
 
 CREATE TABLE distributions (
                                id CHAR(36) PRIMARY KEY DEFAULT (UUID()),
                                task_id CHAR(36),
+                               recipient_id CHAR(36),
+                               -- the recipient's name at the time, so old reports read the same
                                recipient_group VARCHAR(200),
                                quantity_distributed VARCHAR(100),
                                distributed_by CHAR(36),
                                distributed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                                notes TEXT,
                                CONSTRAINT fk_distributions_task FOREIGN KEY (task_id) REFERENCES collection_tasks(id) ON DELETE CASCADE,
-                               CONSTRAINT fk_distributions_user FOREIGN KEY (distributed_by) REFERENCES users(id)
+                               CONSTRAINT fk_distributions_user FOREIGN KEY (distributed_by) REFERENCES users(id),
+                               CONSTRAINT fk_distributions_recipient FOREIGN KEY (recipient_id) REFERENCES recipients(id)
 );
 
 CREATE TABLE audit_logs (

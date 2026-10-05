@@ -10,6 +10,7 @@ const navLinks = {
     admin: [
         { label: 'Dashboard', to: '/admin/dashboard' },
         { label: 'Donors', to: '/admin/donors' },
+        { label: 'Recipients', to: '/admin/recipients' },
         { label: 'Tasks', to: '/admin/tasks' },
         { label: 'Distributions', to: '/admin/distributions' },
     ],

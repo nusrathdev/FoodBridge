@@ -73,6 +73,24 @@ async function seedDemo() {
     }
     console.log(`✅ ${volunteers.length} volunteers created`);
 
+    // ---------- Recipients (where the food is delivered) ----------
+    // Recipients are not removed when demo users are deleted, so reuse any that already exist.
+    const recipients = [
+        { name: 'Karail Slum Community',            address: 'Karail, Banani, Dhaka' },
+        { name: 'Street Children Shelter, Tejgaon', address: 'Tejgaon Industrial Area, Dhaka' },
+        { name: 'Old Age Home, Agargaon',           address: 'Agargaon, Sher-e-Bangla Nagar, Dhaka' },
+    ];
+    const recipientIds = [];
+    for (const r of recipients) {
+        await pool.execute(
+            'INSERT INTO recipients (id, name, address) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE name = name',
+            [uuidv4(), r.name, r.address]
+        );
+        const [[row]] = await pool.execute('SELECT id FROM recipients WHERE name = ?', [r.name]);
+        recipientIds.push(row.id);
+    }
+    console.log(`✅ ${recipients.length} recipients ready`);
+
     // ---------- Food posts ----------
     // status: available | assigned | collected | distributed | expired
     const posts = [
@@ -81,15 +99,15 @@ async function seedDemo() {
         { org: 'City Bakery',           food: 'Assorted bread, buns & pastries',            qty: '25 kg',        addr: '78 Mirpur Road, Kalabagan, Dhaka',   start: hoursFromNow(2), end: hoursFromNow(8), status: 'available' },
         { org: 'FreshMart Superstore',  food: 'Fresh vegetables & fruits (near expiry)',    qty: '60 kg',        addr: 'Plot 9, Gulshan-1 Circle, Dhaka',    start: hoursFromNow(3), end: hoursFromNow(10), status: 'available' },
         // assigned — task in progress
-        { org: 'Spice Garden Catering', food: 'Biryani from cancelled event (sealed trays)', qty: '80 servings', addr: '22 Banani C/A, Dhaka',               start: hoursFromNow(-1), end: hoursFromNow(4), status: 'assigned', volunteer: 0 },
-        { org: 'Green Leaf Restaurant', food: 'Vegetable khichuri & eggs',                   qty: '30 meal boxes', addr: 'House 12, Road 5, Dhanmondi, Dhaka', start: hoursFromNow(0), end: hoursFromNow(6), status: 'assigned', volunteer: 1 },
+        { org: 'Spice Garden Catering', food: 'Biryani from cancelled event (sealed trays)', qty: '80 servings', addr: '22 Banani C/A, Dhaka',               start: hoursFromNow(-1), end: hoursFromNow(4), status: 'assigned', volunteer: 0, recipient: 0 },
+        { org: 'Green Leaf Restaurant', food: 'Vegetable khichuri & eggs',                   qty: '30 meal boxes', addr: 'House 12, Road 5, Dhanmondi, Dhaka', start: hoursFromNow(0), end: hoursFromNow(6), status: 'assigned', volunteer: 1, recipient: 1 },
         // collected — picked up, awaiting distribution
-        { org: 'City Bakery',           food: 'Day-old sandwich loaves & cakes',             qty: '18 kg',        addr: '78 Mirpur Road, Kalabagan, Dhaka',  start: hoursFromNow(-6), end: hoursFromNow(-2), status: 'collected', volunteer: 2 },
-        { org: 'FreshMart Superstore',  food: 'Dairy products & juice (chilled)',            qty: '35 packs',     addr: 'Plot 9, Gulshan-1 Circle, Dhaka',   start: hoursFromNow(-8), end: hoursFromNow(-3), status: 'collected', volunteer: 3 },
+        { org: 'City Bakery',           food: 'Day-old sandwich loaves & cakes',             qty: '18 kg',        addr: '78 Mirpur Road, Kalabagan, Dhaka',  start: hoursFromNow(-6), end: hoursFromNow(-2), status: 'collected', volunteer: 2, recipient: 2 },
+        { org: 'FreshMart Superstore',  food: 'Dairy products & juice (chilled)',            qty: '35 packs',     addr: 'Plot 9, Gulshan-1 Circle, Dhaka',   start: hoursFromNow(-8), end: hoursFromNow(-3), status: 'collected', volunteer: 3, recipient: 0 },
         // distributed — completed pipeline, feeds analytics
-        { org: 'Green Leaf Restaurant', food: 'Chicken curry & paratha',   qty: '50 meal boxes', addr: 'House 12, Road 5, Dhanmondi, Dhaka', start: hoursFromNow(-30), end: hoursFromNow(-26), status: 'distributed', volunteer: 0, group: 'Karail Slum Community', distQty: '50 meal boxes', notes: 'Distributed with help of local committee.' },
-        { org: 'Spice Garden Catering', food: 'Rice, dal & mixed vegetables', qty: '70 servings', addr: '22 Banani C/A, Dhaka',             start: hoursFromNow(-52), end: hoursFromNow(-48), status: 'distributed', volunteer: 1, group: 'Street Children Shelter, Tejgaon', distQty: '70 servings', notes: 'All servings handed over before 8pm.' },
-        { org: 'City Bakery',           food: 'Bread, jam & seasonal fruits', qty: '20 kg',      addr: '78 Mirpur Road, Kalabagan, Dhaka',   start: hoursFromNow(-76), end: hoursFromNow(-72), status: 'distributed', volunteer: 2, group: 'Old Age Home, Agargaon', distQty: '20 kg', notes: 'Morning breakfast distribution.' },
+        { org: 'Green Leaf Restaurant', food: 'Chicken curry & paratha',   qty: '50 meal boxes', addr: 'House 12, Road 5, Dhanmondi, Dhaka', start: hoursFromNow(-30), end: hoursFromNow(-26), status: 'distributed', volunteer: 0, recipient: 0, distQty: '50 meal boxes', notes: 'Distributed with help of local committee.' },
+        { org: 'Spice Garden Catering', food: 'Rice, dal & mixed vegetables', qty: '70 servings', addr: '22 Banani C/A, Dhaka',             start: hoursFromNow(-52), end: hoursFromNow(-48), status: 'distributed', volunteer: 1, recipient: 1, distQty: '70 servings', notes: 'All servings handed over before 8pm.' },
+        { org: 'City Bakery',           food: 'Bread, jam & seasonal fruits', qty: '20 kg',      addr: '78 Mirpur Road, Kalabagan, Dhaka',   start: hoursFromNow(-76), end: hoursFromNow(-72), status: 'distributed', volunteer: 2, recipient: 2, distQty: '20 kg', notes: 'Morning breakfast distribution.' },
         // expired — nobody collected in time
         { org: 'FreshMart Superstore',  food: 'Salad packs (short shelf life)', qty: '15 packs', addr: 'Plot 9, Gulshan-1 Circle, Dhaka',    start: hoursFromNow(-28), end: hoursFromNow(-24), status: 'expired' },
     ];
@@ -112,15 +130,15 @@ async function seedDemo() {
         const deliveredAt = taskStatus === 'delivered' ? new Date(p.end.getTime() + 2 * 60 * 60 * 1000) : null;
 
         await pool.execute(
-            'INSERT INTO collection_tasks (id, food_post_id, volunteer_id, assigned_by, status, assigned_at, collected_at, delivered_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-            [taskId, postId, volunteerIds[p.volunteer], admin.id, taskStatus, p.start, collectedAt, deliveredAt]
+            'INSERT INTO collection_tasks (id, food_post_id, volunteer_id, assigned_by, recipient_id, status, assigned_at, collected_at, delivered_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+            [taskId, postId, volunteerIds[p.volunteer], admin.id, recipientIds[p.recipient], taskStatus, p.start, collectedAt, deliveredAt]
         );
         taskCount++;
 
         if (p.status === 'distributed') {
             await pool.execute(
-                'INSERT INTO distributions (id, task_id, recipient_group, quantity_distributed, distributed_by, distributed_at, notes) VALUES (?, ?, ?, ?, ?, ?, ?)',
-                [uuidv4(), taskId, p.group, p.distQty, volunteerIds[p.volunteer], deliveredAt, p.notes]
+                'INSERT INTO distributions (id, task_id, recipient_id, recipient_group, quantity_distributed, distributed_by, distributed_at, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                [uuidv4(), taskId, recipientIds[p.recipient], recipients[p.recipient].name, p.distQty, volunteerIds[p.volunteer], deliveredAt, p.notes]
             );
             distCount++;
         }

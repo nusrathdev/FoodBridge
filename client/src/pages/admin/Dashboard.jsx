@@ -187,7 +187,7 @@ export default function AdminDashboard() {
                     {[
                         { label: 'Verify Donors', to: '/admin/donors', color: 'bg-yellow-500' },
                         { label: 'Assign Tasks', to: '/admin/tasks', color: 'bg-purple-500' },
-                        { label: 'Log Distribution', to: '/admin/distributions', color: 'bg-green-600' },
+                        { label: 'View Distributions', to: '/admin/distributions', color: 'bg-green-600' },
                     ].map(link => (
                         <Link key={link.to} to={link.to}
                               className={`${link.color} text-white rounded-lg p-4 text-center

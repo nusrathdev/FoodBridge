@@ -14,6 +14,7 @@ import AdminDashboard from './pages/admin/Dashboard.jsx';
 import DonorVerification from './pages/admin/DonorVerification.jsx';
 import TaskAssignment from './pages/admin/TaskAssignment';
 import Distributions from './pages/admin/Distributions';
+import Recipients from './pages/admin/Recipients';
 
 import VolunteerTasks from './pages/volunteer/Tasks';
 
@@ -58,6 +59,9 @@ export default function App() {
             }/>
             <Route path="/admin/distributions" element={
                 <ProtectedRoute roles={['admin']}><Distributions /></ProtectedRoute>
+            }/>
+            <Route path="/admin/recipients" element={
+                <ProtectedRoute roles={['admin']}><Recipients /></ProtectedRoute>
             }/>
 
             {/* Volunteer */}

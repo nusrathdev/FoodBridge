@@ -3,15 +3,29 @@ import client, { errorMessage } from '../../api/client';
 import Navbar from '../../components/Navbar';
 import StatusBadge from '../../components/StatusBadge';
 
+// "Delivered to" value for a place that is not on the NGO's list (e.g. street people at a station).
+const OTHER = 'other';
+
+const inputClass = 'w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500';
+
 export default function VolunteerTasks() {
     const [tasks, setTasks] = useState([]);
+    const [recipients, setRecipients] = useState([]);
     const [loading, setLoading] = useState(true);
     const [actionId, setActionId] = useState(null);
     const [error, setError] = useState('');
+    // The task whose "record the delivery" form is open, and that form's values.
+    const [deliveringId, setDeliveringId] = useState(null);
+    const [delivery, setDelivery] = useState({});
+    const [deliveryError, setDeliveryError] = useState('');
 
     const loadTasks = useCallback(async () => {
-        const { data } = await client.get('/tasks');
-        setTasks(data);
+        const [tasksRes, recipientsRes] = await Promise.all([
+            client.get('/tasks'),
+            client.get('/recipients'),
+        ]);
+        setTasks(tasksRes.data);
+        setRecipients(recipientsRes.data);
     }, []);
 
     useEffect(() => {
@@ -39,6 +53,43 @@ export default function VolunteerTasks() {
             setActionId(null);
         }
     };
+
+    const openDelivery = (task) => {
+        // Start from the admin's suggestion when there is one. The volunteer can change it.
+        const suggested = recipients.some(r => r.id === task.recipient_id) ? task.recipient_id : '';
+        setDelivery({
+            recipient_choice: suggested || (recipients.length ? '' : OTHER),
+            recipient_group: '',
+            quantity_distributed: task.quantity,
+            notes: '',
+        });
+        setDeliveryError('');
+        setDeliveringId(task.id);
+    };
+
+    const submitDelivery = async (e, taskId) => {
+        e.preventDefault();
+        setDeliveryError('');
+        const isOther = delivery.recipient_choice === OTHER;
+        setActionId(taskId);
+        try {
+            await client.patch(`/tasks/${taskId}/status`, {
+                status: 'delivered',
+                recipient_id: isOther ? undefined : delivery.recipient_choice,
+                recipient_group: isOther ? delivery.recipient_group : undefined,
+                quantity_distributed: delivery.quantity_distributed,
+                notes: delivery.notes,
+            });
+            setDeliveringId(null);
+            await loadTasks();
+        } catch (err) {
+            setDeliveryError(errorMessage(err, 'Failed to record the delivery'));
+        } finally {
+            setActionId(null);
+        }
+    };
+
+    const setField = (key, value) => setDelivery(d => ({ ...d, [key]: value }));
 
     const active = tasks.filter(t => !['delivered', 'cancelled'].includes(t.status));
     const history = tasks.filter(t => ['delivered', 'cancelled'].includes(t.status));
@@ -81,59 +132,144 @@ export default function VolunteerTasks() {
                             {active.map(task => (
                                 <div key={task.id}
                                      className="bg-white rounded-lg shadow-sm p-5 border border-gray-100">
-                                    <div className="flex items-start justify-between gap-4 mb-4">
-                                        <div className="space-y-1">
-                                            <div className="flex items-center gap-2">
-                                                <span className="font-semibold text-gray-800">{task.food_type}</span>
-                                                <StatusBadge status={task.status} />
-                                            </div>
-                                            <p className="text-sm text-gray-500">
-                                                Quantity: {task.quantity}
-                                            </p>
-                                            <p className="text-sm text-gray-500">
-                                                Pickup: {task.pickup_address}
-                                            </p>
-                                            <p className="text-sm text-gray-500">
-                                                Donor: {task.donor_org}
-                                            </p>
-                                            <p className="text-xs text-gray-400">
-                                                Window: {new Date(task.pickup_window_start).toLocaleString()}
-                                                {' → '}
-                                                {new Date(task.pickup_window_end).toLocaleString()}
-                                            </p>
+                                    <div className="space-y-1 mb-4">
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-semibold text-gray-800">{task.food_type}</span>
+                                            <StatusBadge status={task.status} />
                                         </div>
+                                        <p className="text-sm text-gray-500">
+                                            Quantity: {task.quantity}
+                                        </p>
+                                        <p className="text-sm text-gray-500">
+                                            Pickup: {task.pickup_address} ({task.donor_org})
+                                        </p>
+                                        <p className="text-sm text-gray-800">
+                                            <span className="font-medium">Suggested destination:</span>{' '}
+                                            {task.recipient_name
+                                                ? `${task.recipient_name}, ${task.recipient_address}`
+                                                : 'None. You choose who receives the food.'}
+                                        </p>
+                                        {task.recipient_phone && (
+                                            <p className="text-sm text-gray-500">
+                                                Recipient contact: {task.recipient_phone}
+                                            </p>
+                                        )}
+                                        <p className="text-xs text-gray-400">
+                                            Window: {new Date(task.pickup_window_start).toLocaleString()}
+                                            {' → '}
+                                            {new Date(task.pickup_window_end).toLocaleString()}
+                                        </p>
                                     </div>
 
                                     {/* Action buttons based on current status */}
-                                    <div className="flex gap-2">
-                                        {task.status === 'assigned' && (
-                                            <>
-                                                <button
-                                                    onClick={() => updateStatus(task.id, 'collected')}
-                                                    disabled={actionId === task.id}
-                                                    className="bg-brand-600 text-white px-4 py-2 rounded-lg
-                                     text-sm font-medium hover:bg-brand-700 disabled:opacity-50">
-                                                    {actionId === task.id ? 'Updating...' : 'Mark Collected'}
-                                                </button>
-                                                <button
-                                                    onClick={() => {
-                                                        if (window.confirm('Cancel this task? The food post will return to available.'))
-                                                            updateStatus(task.id, 'cancelled');
-                                                    }}
-                                                    disabled={actionId === task.id}
-                                                    className="border border-red-300 text-red-600 px-4 py-2 rounded-lg
-                                     text-sm font-medium hover:bg-red-50 disabled:opacity-50">
-                                                    Cancel Task
-                                                </button>
-                                            </>
-                                        )}
-                                        {task.status === 'collected' && (
-                                            <div className="bg-orange-50 border border-orange-200 text-orange-700
-                                      px-4 py-2 rounded-lg text-sm">
-                                                Food collected. Waiting for admin to log the distribution.
+                                    {task.status === 'assigned' && (
+                                        <div className="flex gap-2">
+                                            <button
+                                                onClick={() => updateStatus(task.id, 'collected')}
+                                                disabled={actionId === task.id}
+                                                className="bg-brand-600 text-white px-4 py-2 rounded-lg
+                                 text-sm font-medium hover:bg-brand-700 disabled:opacity-50">
+                                                {actionId === task.id ? 'Updating...' : 'Mark Collected'}
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    if (window.confirm('Cancel this task? The food post will return to available.'))
+                                                        updateStatus(task.id, 'cancelled');
+                                                }}
+                                                disabled={actionId === task.id}
+                                                className="border border-red-300 text-red-600 px-4 py-2 rounded-lg
+                                 text-sm font-medium hover:bg-red-50 disabled:opacity-50">
+                                                Cancel Task
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {task.status === 'collected' && deliveringId !== task.id && (
+                                        <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                                            <button
+                                                onClick={() => openDelivery(task)}
+                                                className="bg-brand-600 text-white px-4 py-2 rounded-lg
+                                 text-sm font-medium hover:bg-brand-700">
+                                                Mark Delivered
+                                            </button>
+                                            <p className="text-sm text-gray-500">
+                                                Hand the food over, then record who received it.
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    {/* Record the delivery: who received it, how much, any notes */}
+                                    {deliveringId === task.id && (
+                                        <form onSubmit={e => submitDelivery(e, task.id)}
+                                              className="border-t border-gray-100 pt-4 space-y-3">
+                                            <h3 className="text-sm font-semibold text-gray-800">Record the delivery</h3>
+
+                                            {deliveryError && (
+                                                <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">
+                                                    {deliveryError}
+                                                </div>
+                                            )}
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Delivered to <span className="text-red-500">*</span>
+                                                </label>
+                                                <select required value={delivery.recipient_choice}
+                                                        onChange={e => setField('recipient_choice', e.target.value)}
+                                                        className={inputClass}>
+                                                    <option value="">Choose who received the food</option>
+                                                    {recipients.map(r => (
+                                                        <option key={r.id} value={r.id}>{r.name}</option>
+                                                    ))}
+                                                    <option value={OTHER}>Somewhere else (describe it)</option>
+                                                </select>
                                             </div>
-                                        )}
-                                    </div>
+
+                                            {delivery.recipient_choice === OTHER && (
+                                                <div>
+                                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                        Who received it, and where <span className="text-red-500">*</span>
+                                                    </label>
+                                                    <input required value={delivery.recipient_group}
+                                                           onChange={e => setField('recipient_group', e.target.value)}
+                                                           placeholder="e.g. Street people near Kamalapur Railway Station"
+                                                           className={inputClass} />
+                                                </div>
+                                            )}
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Quantity delivered <span className="text-red-500">*</span>
+                                                </label>
+                                                <input required value={delivery.quantity_distributed}
+                                                       onChange={e => setField('quantity_distributed', e.target.value)}
+                                                       className={inputClass} />
+                                            </div>
+
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                                    Notes <span className="text-gray-400 font-normal">(optional)</span>
+                                                </label>
+                                                <textarea rows={2} value={delivery.notes}
+                                                          onChange={e => setField('notes', e.target.value)}
+                                                          placeholder="e.g. Shared among 30 people, all eaten on the spot"
+                                                          className={`${inputClass} resize-none`} />
+                                            </div>
+
+                                            <div className="flex gap-2">
+                                                <button type="submit" disabled={actionId === task.id}
+                                                        className="bg-brand-600 text-white px-4 py-2 rounded-lg
+                                     text-sm font-medium hover:bg-brand-700 disabled:opacity-50">
+                                                    {actionId === task.id ? 'Saving...' : 'Confirm delivery'}
+                                                </button>
+                                                <button type="button" onClick={() => setDeliveringId(null)}
+                                                        className="border border-gray-300 text-gray-600 px-4 py-2
+                                     rounded-lg text-sm hover:bg-gray-50">
+                                                    Cancel
+                                                </button>
+                                            </div>
+                                        </form>
+                                    )}
                                 </div>
                             ))}
                         </div>
@@ -152,6 +288,7 @@ export default function VolunteerTasks() {
                                 <tr>
                                     <th className="px-6 py-3 text-left">Food</th>
                                     <th className="px-6 py-3 text-left">Donor</th>
+                                    <th className="px-6 py-3 text-left">Delivered to</th>
                                     <th className="px-6 py-3 text-left">Status</th>
                                     <th className="px-6 py-3 text-left">Assigned</th>
                                 </tr>
@@ -163,6 +300,7 @@ export default function VolunteerTasks() {
                                             {task.food_type}
                                         </td>
                                         <td className="px-6 py-3 text-gray-600">{task.donor_org}</td>
+                                        <td className="px-6 py-3 text-gray-600">{task.delivered_to || '-'}</td>
                                         <td className="px-6 py-3">
                                             <StatusBadge status={task.status} />
                                         </td>

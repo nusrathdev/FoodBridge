@@ -24,7 +24,7 @@ const exportCsv = async (req, res) => {
             { label: 'Quantity Distributed', value: 'quantity_distributed' },
             { label: 'Recipient Group', value: 'recipient_group' },
             { label: 'Collected By', value: 'collected_by_volunteer' },
-            { label: 'Logged By', value: 'logged_by_admin' },
+            { label: 'Recorded By', value: 'recorded_by' },
             { label: 'Distributed At', value: 'distributed_at' },
             { label: 'Notes', value: 'notes' },
         ];
